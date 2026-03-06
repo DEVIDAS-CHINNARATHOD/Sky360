@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>AI Drone Command Center</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+
+body{
+margin:0;
+height:100vh;
+display:flex;
+font-family:Arial;
+background:#0f172a;
+color:white;
+}
+
+/* left panel */
+
+#agent{
+width:35%;
+background:#020617;
+padding:25px;
+display:flex;
+flex-direction:column;
+}
+
+#agent h2{
+margin-top:0;
+color:#38bdf8;
+}
+
+#logs{
+flex:1;
+overflow:auto;
+font-family:monospace;
+color:#22c55e;
+padding:10px;
+border:1px solid #1e293b;
+border-radius:8px;
+background:black;
+}
+
+/* camera panel */
+
+#cameraBox{
+margin-top:15px;
+border-radius:10px;
+overflow:hidden;
+display:none;
+border:2px solid #1e293b;
+}
+
+#cameraBox img{
+width:100%;
+}
+
+/* map panel */
+
+#map{
+flex:1;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="agent">
+
+<h2>AI Drone Agent</h2>
+
+<div id="logs"></div>
+
+<div id="cameraBox">
+<img id="camera"
+src="http://192.168.1.5:8080/video">
+</div>
+
+</div>
+
+<div id="map"></div>
+
+<script>
+
+var map = L.map("map").setView([13.115,77.635],13);
+
+L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+).addTo(map);
+
+function log(msg){
+
+document.getElementById("logs").innerHTML += msg+"<br>";
+
+}
+
+/* simulate drone movement */
+
+function simulate(start,end){
+
+let drone = L.marker(start).addTo(map);
+
+let steps = 60;
+
+let latStep = (end[0]-start[0])/steps;
+let lngStep = (end[1]-start[1])/steps;
+
+let i = 0;
+
+let move = setInterval(()=>{
+
+let lat = start[0] + latStep*i;
+let lng = start[1] + lngStep*i;
+
+drone.setLatLng([lat,lng]);
+
+i++;
+
+if(i > steps){
+
+clearInterval(move);
+
+log("Drone reached incident location");
+
+log("Opening live visual feed");
+
+document.getElementById("cameraBox").style.display="block";
+
+}
+
+},200);
+
+}
+
+
+/* start mission */
+
+async function startMission(){
+
+log("Checking Firebase for incidents...");
+
+let res = await fetch("/mission");
+
+let data = await res.json();
+
+let drones = data.drones;
+
+/* show drones */
+
+for(let d in drones){
+
+L.marker(drones[d])
+.addTo(map)
+.bindPopup("Drone "+d);
+
+}
+
+/* if no incident */
+
+if(data.status==="no incident"){
+
+log("No incident detected");
+
+return;
+
+}
+
+let incident = data.incident;
+
+L.marker(incident,{
+icon: L.icon({
+iconUrl:"https://cdn-icons-png.flaticon.com/512/684/684908.png",
+iconSize:[30,30]
+})
+}).addTo(map)
+.bindPopup("Incident Location");
+
+log("Incident detected");
+
+await sleep(1000);
+
+log("Analyzing drones...");
+
+await sleep(1000);
+
+let selected = data.selected_drone;
+
+log("Nearest drone: "+selected);
+
+let start = drones[selected];
+
+let route = L.polyline(
+[start,incident],
+{color:"red",weight:4}
+).addTo(map);
+
+map.fitBounds(route.getBounds());
+
+log("Flight path generated");
+
+await sleep(1000);
+
+log("Dispatching drone");
+
+simulate(start,incident);
+
+}
+
+function sleep(ms){
+
+return new Promise(r=>setTimeout(r,ms));
+
+}
+
+startMission();
+
+</script>
+
+</body>
+</html>
