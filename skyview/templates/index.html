@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>AI Drone Command Center</title>
+
+<script src="https://apis.mappls.com/advancedmaps/api/{{mappls_key}}/map_sdk?layer=vector&v=3.0"></script>
+
+<style>
+
+body{
+margin:0;
+background:#0b1120;
+color:white;
+font-family:system-ui;
+height:100vh;
+display:flex;
+flex-direction:column;
+}
+
+header{
+background:#020617;
+padding:12px;
+font-size:20px;
+text-align:center;
+border-bottom:1px solid #1e293b;
+}
+
+#container{
+flex:1;
+display:flex;
+}
+
+#agent{
+width:35%;
+background:#020617;
+border-right:1px solid #1e293b;
+padding:20px;
+}
+
+#logs{
+background:black;
+color:#22c55e;
+height:90%;
+overflow:auto;
+padding:10px;
+font-family:monospace;
+border-radius:6px;
+}
+
+#mapPanel{
+flex:1;
+padding:10px;
+}
+
+#map{
+height:100%;
+border-radius:8px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>AI Drone Command Center</header>
+
+<div id="container">
+
+<div id="agent">
+
+<h3>AI Agent Console</h3>
+
+<div id="logs"></div>
+
+</div>
+
+<div id="mapPanel">
+
+<div id="map"></div>
+
+</div>
+
+</div>
+
+<script>
+
+let map;
+let drones=[];
+let droneMarkers={};
+
+function log(msg){
+document.getElementById("logs").innerHTML += msg + "<br>";
+}
+
+// initialize map
+function initMap(){
+
+map = new mappls.Map("map",{
+center:[13.114789,77.63475],
+zoom:13
+});
+
+loadDrones();
+
+}
+
+// create drone marker
+function createDroneMarker(lat,lng,id){
+
+let marker = new mappls.Marker({
+map:map,
+position:{lat:lat,lng:lng},
+icon:"/assets/drone.png",
+width:40,
+height:40,
+title:id
+});
+
+return marker;
+
+}
+
+// fetch drones
+async function loadDrones(){
+
+log("Fetching drones from database...");
+
+let res = await fetch("/drones");
+drones = await res.json();
+
+drones.forEach(drone=>{
+
+let marker = createDroneMarker(drone.lat,drone.lng,drone.id);
+
+droneMarkers[drone.id] = marker;
+
+});
+
+log("Drones loaded.");
+
+simulateIncident();
+
+}
+
+// simulate incident
+function simulateIncident(){
+
+setTimeout(()=>{
+
+let incidentLat = 13.116;
+let incidentLng = 77.636;
+
+log("Incident detected.");
+
+new mappls.Marker({
+map:map,
+position:{lat:incidentLat,lng:incidentLng},
+title:"Incident"
+});
+
+dispatchNearestDrone(incidentLat,incidentLng);
+
+},2000);
+
+}
+
+// simple distance function
+function distance(a,b,c,d){
+
+let dx=a-c;
+let dy=b-d;
+
+return Math.sqrt(dx*dx+dy*dy);
+
+}
+
+// choose nearest drone
+function dispatchNearestDrone(targetLat,targetLng){
+
+let nearest=null;
+let min=999;
+
+drones.forEach(d=>{
+
+let dist=distance(d.lat,d.lng,targetLat,targetLng);
+
+if(dist<min){
+min=dist;
+nearest=d;
+}
+
+});
+
+log("Nearest drone selected: "+nearest.id);
+log("Dispatching drone...");
+
+animateDrone(nearest,targetLat,targetLng);
+
+}
+
+// move drone
+function animateDrone(drone,targetLat,targetLng){
+
+let lat=drone.lat;
+let lng=drone.lng;
+
+let marker = droneMarkers[drone.id];
+
+let step=0;
+
+let move=setInterval(()=>{
+
+lat += (targetLat-lat)*0.2;
+lng += (targetLng-lng)*0.2;
+
+marker.setPosition({
+lat:lat,
+lng:lng
+});
+
+step++;
+
+if(step>15){
+
+clearInterval(move);
+
+log("Drone reached incident.");
+
+}
+
+},300);
+
+}
+
+initMap();
+
+</script>
+
+</body>
+</html>
